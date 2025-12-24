@@ -11,7 +11,9 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     sourcemap: false,
-    minify: 'terser',
+    // Terser가 설치되어 있지 않아 발생하는 빌드 오류를 해결하기 위해 
+    // Vite의 기본 고성능 minifier인 'esbuild'를 사용하거나 설정을 제거합니다.
+    minify: 'esbuild', 
     rollupOptions: {
       input: {
         main: './index.html'
