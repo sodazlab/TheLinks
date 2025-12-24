@@ -1,6 +1,7 @@
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { User } from '../types';
+import { supabase, isConfigured } from '../lib/supabase';
 
 interface PiAuthContextType {
   user: User | null;
@@ -16,29 +17,87 @@ export const PiAuthProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Mock initial session check
   useEffect(() => {
-    const savedUser = localStorage.getItem('pi_links_user');
-    if (savedUser) {
-      setUser(JSON.parse(savedUser));
-    }
-    setLoading(false);
+    const checkSession = async () => {
+      const savedUser = localStorage.getItem('pi_links_user');
+      if (savedUser) {
+        try {
+          const parsed = JSON.parse(savedUser);
+          if (isConfigured) {
+            const { data, error } = await supabase
+              .from('users')
+              .select('*')
+              .eq('pi_uid', parsed.pi_uid)
+              .single();
+            
+            if (data && !error) {
+              setUser(data);
+              localStorage.setItem('pi_links_user', JSON.stringify(data));
+            } else {
+              setUser(parsed);
+            }
+          } else {
+            setUser(parsed);
+          }
+        } catch (e) {
+          console.error("Session restore failed", e);
+        }
+      }
+      setLoading(false);
+    };
+    checkSession();
   }, []);
 
   const login = async () => {
     setLoading(true);
     try {
-      await new Promise(resolve => setTimeout(resolve, 800));
-      
-      const mockPiUser: User = {
-        id: 'user_admin_demo',
-        pi_username: 'Pioneer_Admin',
-        pi_uid: 'uid_admin_777',
-        role: 'admin' // 테스트를 위해 기본적으로 admin 권한 부여
-      };
+      let piUser;
 
-      setUser(mockPiUser);
-      localStorage.setItem('pi_links_user', JSON.stringify(mockPiUser));
+      if ((window as any).Pi) {
+        try {
+          const auth = await (window as any).Pi.authenticate(['username'], (onIncompletePaymentFound: any) => {
+            console.log('Incomplete payment', onIncompletePaymentFound);
+          });
+          piUser = {
+            pi_username: auth.user.username,
+            pi_uid: auth.user.uid,
+          };
+        } catch (sdkError: any) {
+          throw new Error('Pi SDK Error. Use Pi Browser.');
+        }
+      } else {
+        // Mock User for Dev
+        await new Promise(r => setTimeout(r, 600));
+        piUser = { pi_username: 'Pioneer_Admin', pi_uid: 'dev_mode_admin' };
+      }
+      
+      let finalUserData: User;
+
+      if (isConfigured) {
+        const { data, error } = await supabase
+          .from('users')
+          .upsert({ 
+            pi_username: piUser.pi_username, 
+            pi_uid: piUser.pi_uid,
+          }, { onConflict: 'pi_uid' })
+          .select()
+          .single();
+
+        if (error) throw new Error(`DB Sync Error: ${error.message}`);
+        finalUserData = data;
+      } else {
+        finalUserData = {
+          id: 'mock-id',
+          pi_username: piUser.pi_username,
+          pi_uid: piUser.pi_uid,
+          role: piUser.pi_username.toLowerCase().includes('admin') ? 'admin' : 'user'
+        };
+      }
+
+      setUser(finalUserData);
+      localStorage.setItem('pi_links_user', JSON.stringify(finalUserData));
+    } catch (err: any) {
+      alert(err.message || 'Login failed');
     } finally {
       setLoading(false);
     }

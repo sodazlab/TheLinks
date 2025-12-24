@@ -16,15 +16,14 @@ export interface Post {
   category: Category;
   title: string;
   description: string;
-  thumbnail_image: string;
+  thumbnail_image: string; // 로컬 경로 또는 URL
   comment?: string;
   status: 'pending' | 'active' | 'rejected';
   created_at: string;
 }
 
-export interface OGMetadata {
-  title: string;
-  description: string;
-  image: string;
-  domain: string;
+export interface BrandConfig {
+  color: string;
+  gradient: string;
+  localAsset: string;
 }
