@@ -7,11 +7,11 @@ import Navbar from './components/Navbar';
 import Feed from './components/Feed';
 import SubmissionForm from './components/SubmissionForm';
 import AdminDashboard from './components/AdminDashboard';
-import { Layout, DatabaseZap } from 'lucide-react';
+import { Layout, DatabaseZap, AlertTriangle } from 'lucide-react';
 import { supabase, isConfigured } from './lib/supabase';
 
 const MainApp: React.FC = () => {
-  const { user, loading, login, isAdmin } = usePiAuth();
+  const { user, loading, login, isAdmin, configError } = usePiAuth();
   const [posts, setPosts] = useState<Post[]>([]);
   const [activeCategory, setActiveCategory] = useState<Category | 'All'>('All');
   const [fetching, setFetching] = useState(true);
@@ -92,9 +92,19 @@ const MainApp: React.FC = () => {
       <Navbar />
       <main className="container mx-auto px-6 pt-28 max-w-6xl">
         {!isConfigured && (
-          <div className="mb-10 p-5 glass rounded-[2rem] border-yellow-500/20 flex items-center gap-4 animate-pulse">
-            <DatabaseZap className="text-yellow-500 w-6 h-6" />
-            <p className="text-yellow-500 text-sm font-bold uppercase tracking-wider">Mock Mode: Database is not connected.</p>
+          <div className="mb-10 p-6 glass rounded-[2.5rem] border-red-500/20 flex flex-col md:flex-row items-center gap-6 animate-in fade-in slide-in-from-top-4 duration-500">
+            <div className="p-4 bg-red-500/10 rounded-2xl">
+              <AlertTriangle className="text-red-500 w-8 h-8" />
+            </div>
+            <div className="flex-1 text-center md:text-left">
+              <h3 className="text-red-500 font-black uppercase tracking-widest text-sm mb-1">Configuration Required</h3>
+              <p className="text-gray-400 text-sm leading-relaxed">
+                Supabase variables are missing. Please add <strong>VITE_SUPABASE_URL</strong> and <strong>VITE_SUPABASE_ANON_KEY</strong> to Vercel, then <strong>Redeploy</strong>.
+              </p>
+            </div>
+            <div className="px-5 py-2 glass rounded-full text-[10px] font-black uppercase tracking-tighter text-gray-500">
+              Mock Mode Active
+            </div>
           </div>
         )}
 

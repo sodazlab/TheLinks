@@ -9,6 +9,7 @@ interface PiAuthContextType {
   login: () => Promise<void>;
   logout: () => void;
   isAdmin: boolean;
+  configError: string | null;
 }
 
 const PiAuthContext = createContext<PiAuthContextType | undefined>(undefined);
@@ -16,8 +17,13 @@ const PiAuthContext = createContext<PiAuthContextType | undefined>(undefined);
 export const PiAuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [configError, setConfigError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (!isConfigured) {
+      setConfigError("Supabase environment variables (VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY) are missing. Check Vercel settings and Redeploy.");
+    }
+
     const checkSession = async () => {
       const savedUser = localStorage.getItem('pi_links_user');
       if (savedUser) {
@@ -63,10 +69,9 @@ export const PiAuthProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             pi_uid: auth.user.uid,
           };
         } catch (sdkError: any) {
-          throw new Error('Pi SDK Error. Use Pi Browser.');
+          throw new Error('Pi SDK Error. Please use the Pi Browser.');
         }
       } else {
-        // Mock User for Dev
         await new Promise(r => setTimeout(r, 600));
         piUser = { pi_username: 'Pioneer_Admin', pi_uid: 'dev_mode_admin' };
       }
@@ -83,7 +88,7 @@ export const PiAuthProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           .select()
           .single();
 
-        if (error) throw new Error(`DB Sync Error: ${error.message}`);
+        if (error) throw new Error(`Database Connection Error: ${error.message}. Ensure your Supabase tables are created.`);
         finalUserData = data;
       } else {
         finalUserData = {
@@ -109,7 +114,7 @@ export const PiAuthProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   };
 
   return (
-    <PiAuthContext.Provider value={{ user, loading, login, logout, isAdmin: user?.role === 'admin' }}>
+    <PiAuthContext.Provider value={{ user, loading, login, logout, isAdmin: user?.role === 'admin', configError }}>
       {children}
     </PiAuthContext.Provider>
   );
