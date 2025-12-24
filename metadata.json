@@ -1,0 +1,9 @@
+{
+  "name": "The Links - Pi Network",
+  "description": "A high-end link curation platform for the Pi Network ecosystem, featuring glassmorphism design and admin-moderated submissions.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone",
+    "geolocation"
+  ]
+}
