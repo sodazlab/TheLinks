@@ -7,11 +7,12 @@ import Navbar from './components/Navbar';
 import Feed from './components/Feed';
 import SubmissionForm from './components/SubmissionForm';
 import AdminDashboard from './components/AdminDashboard';
-import { Layout, DatabaseZap, AlertTriangle } from 'lucide-react';
+import { Layout, AlertTriangle } from 'lucide-react';
 import { supabase, isConfigured } from './lib/supabase';
 
+// Main application logic and layout
 const MainApp: React.FC = () => {
-  const { user, loading, login, isAdmin, configError } = usePiAuth();
+  const { user, loading, login, isAdmin } = usePiAuth();
   const [posts, setPosts] = useState<Post[]>([]);
   const [activeCategory, setActiveCategory] = useState<Category | 'All'>('All');
   const [fetching, setFetching] = useState(true);
@@ -27,9 +28,17 @@ const MainApp: React.FC = () => {
         .from('posts')
         .select('*')
         .order('created_at', { ascending: false });
-      if (!error && data) setPosts(data);
+      
+      if (error) {
+        console.error('Fetch error:', error);
+        if (error.code === '42703' || error.message.includes('column') || error.message.includes('cache')) {
+          console.warn("Schema mismatch detected. Ensure SQL script is run in Supabase.");
+        }
+      } else if (data) {
+        setPosts(data);
+      }
     } catch (err) {
-      console.error('Fetch error:', err);
+      console.error('Unexpected error fetching posts:', err);
     } finally {
       setFetching(false);
     }
@@ -39,7 +48,7 @@ const MainApp: React.FC = () => {
     fetchPosts();
     if (isConfigured) {
       const channel = supabase
-        .channel('db-sync')
+        .channel('db-sync-global')
         .on('postgres_changes', { event: '*', schema: 'public', table: 'posts' }, () => {
           fetchPosts();
         })
@@ -49,14 +58,44 @@ const MainApp: React.FC = () => {
   }, []);
 
   const handleAddPost = async (newPost: Omit<Post, 'id' | 'status' | 'created_at' | 'user_id' | 'pi_username'>) => {
-    if (!user) return;
+    if (!user) {
+      alert("로그인이 필요합니다.");
+      return;
+    }
+    
     if (!isConfigured) {
-      const mock: Post = { ...newPost, id: Math.random().toString(), user_id: user.id, pi_username: user.pi_username, status: 'pending', created_at: new Date().toISOString() };
+      const mock: Post = { 
+        ...newPost, 
+        id: Math.random().toString(), 
+        user_id: user.pi_uid, 
+        pi_username: user.pi_username, 
+        status: 'pending', 
+        created_at: new Date().toISOString() 
+      };
       setPosts(prev => [mock, ...prev]);
       return;
     }
-    const { error } = await supabase.from('posts').insert([{ ...newPost, user_id: user.pi_uid, pi_username: user.pi_username, status: 'pending' }]);
-    if (error) alert('Error: ' + error.message);
+    
+    const { error } = await supabase.from('posts').insert([{ 
+      title: newPost.title,
+      description: newPost.description,
+      original_url: newPost.original_url,
+      category: newPost.category,
+      thumbnail_image: newPost.thumbnail_image,
+      comment: newPost.comment,
+      user_id: user.pi_uid,
+      pi_username: user.pi_username, 
+      status: 'pending' 
+    }]);
+
+    if (error) {
+      console.error("Submission error:", error);
+      if (error.message.includes('column')) {
+        alert("데이터베이스 구조 오류입니다. 관리자에게 문의하거나 제공된 마스터 SQL을 다시 실행하세요.");
+      } else {
+        alert('게시물 등록 중 오류가 발생했습니다: ' + error.message);
+      }
+    }
   };
 
   const handleUpdateStatus = async (id: string, status: 'active' | 'rejected' | 'pending') => {
@@ -65,7 +104,7 @@ const MainApp: React.FC = () => {
       return;
     }
     const { error } = await supabase.from('posts').update({ status }).eq('id', id);
-    if (error) alert('Error: ' + error.message);
+    if (error) alert('상태 변경 실패: ' + error.message);
   };
 
   const handleDeletePost = async (id: string) => {
@@ -74,7 +113,7 @@ const MainApp: React.FC = () => {
       return;
     }
     const { error } = await supabase.from('posts').delete().eq('id', id);
-    if (error) alert('Error: ' + error.message);
+    if (error) alert('삭제 실패: ' + error.message);
   };
 
   if (loading || (fetching && posts.length === 0)) return (
@@ -97,13 +136,10 @@ const MainApp: React.FC = () => {
               <AlertTriangle className="text-red-500 w-8 h-8" />
             </div>
             <div className="flex-1 text-center md:text-left">
-              <h3 className="text-red-500 font-black uppercase tracking-widest text-sm mb-1">Configuration Required</h3>
+              <h3 className="text-red-500 font-black uppercase tracking-widest text-sm mb-1">환경 변수 미설정</h3>
               <p className="text-gray-400 text-sm leading-relaxed">
-                Supabase variables are missing. Please add <strong>VITE_SUPABASE_URL</strong> and <strong>VITE_SUPABASE_ANON_KEY</strong> to Vercel, then <strong>Redeploy</strong>.
+                Supabase 연결 설정이 없습니다. Vercel에서 환경 변수를 설정하고 재배포하세요.
               </p>
-            </div>
-            <div className="px-5 py-2 glass rounded-full text-[10px] font-black uppercase tracking-tighter text-gray-500">
-              Mock Mode Active
             </div>
           </div>
         )}
@@ -113,7 +149,7 @@ const MainApp: React.FC = () => {
             <div className="animate-in fade-in duration-700">
               <div className="mb-16 text-center space-y-6">
                 <h1 className="text-6xl md:text-8xl font-black tracking-tighter leading-none">THE <span className="text-pi-gradient">LINKS</span></h1>
-                <p className="text-gray-400 text-lg md:text-2xl max-w-3xl mx-auto font-medium">Verified <span className="text-white">Pi Network</span> ecosystem directory.</p>
+                <p className="text-gray-400 text-lg md:text-2xl max-w-3xl mx-auto font-medium">검증된 <span className="text-white">Pi Network</span> 생태계 디렉토리.</p>
               </div>
               <div className="flex flex-wrap gap-3 mb-16 justify-center overflow-x-auto no-scrollbar pb-4">
                 {['All', 'Web', 'Threads', 'Reddit', 'Youtube', 'X', 'Instagram', 'Notion', 'Other'].map(cat => (
@@ -125,10 +161,15 @@ const MainApp: React.FC = () => {
                 ))}
               </div>
               <Feed posts={activePosts} />
+              {activePosts.length === 0 && !fetching && (
+                 <div className="text-center py-20 opacity-30 font-black uppercase tracking-widest text-sm italic">
+                    Waiting for approved links...
+                 </div>
+              )}
             </div>
           } />
           <Route path="/submit" element={user ? <SubmissionForm onAddPost={handleAddPost} /> : <div className="text-center py-20 glass rounded-[3rem] border-white/5 max-w-2xl mx-auto">
-            <h2 className="text-4xl font-black mb-6">Join the Community</h2>
+            <h2 className="text-4xl font-black mb-6">커뮤니티에 기여하기</h2>
             <button onClick={login} className="pi-gradient px-12 py-5 rounded-[2rem] font-black text-xl text-[#0F0F1A]">Connect Pi</button>
           </div>} />
           <Route path="/admin" element={<AdminDashboard pendingPosts={pendingPosts} rejectedPosts={rejectedPosts} onUpdateStatus={handleUpdateStatus} onDeletePost={handleDeletePost} />} />
@@ -159,9 +200,12 @@ const MainApp: React.FC = () => {
   );
 };
 
+// Top-level App wrapper that provides Auth and Router context
 const App: React.FC = () => (
   <PiAuthProvider>
-    <Router><MainApp /></Router>
+    <Router>
+      <MainApp />
+    </Router>
   </PiAuthProvider>
 );
 

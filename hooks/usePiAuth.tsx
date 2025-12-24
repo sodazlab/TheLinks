@@ -21,7 +21,7 @@ export const PiAuthProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
   useEffect(() => {
     if (!isConfigured) {
-      setConfigError("Supabase environment variables (VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY) are missing. Check Vercel settings and Redeploy.");
+      setConfigError("Supabase 설정이 누락되었습니다.");
     }
 
     const checkSession = async () => {
@@ -34,7 +34,7 @@ export const PiAuthProvider: React.FC<{ children: React.ReactNode }> = ({ childr
               .from('users')
               .select('*')
               .eq('pi_uid', parsed.pi_uid)
-              .single();
+              .maybeSingle();
             
             if (data && !error) {
               setUser(data);
@@ -69,7 +69,7 @@ export const PiAuthProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             pi_uid: auth.user.uid,
           };
         } catch (sdkError: any) {
-          throw new Error('Pi SDK Error. Please use the Pi Browser.');
+          throw new Error('Pi SDK 인증 실패. Pi 브라우저에서 접속하세요.');
         }
       } else {
         await new Promise(r => setTimeout(r, 600));
@@ -79,6 +79,7 @@ export const PiAuthProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       let finalUserData: User;
 
       if (isConfigured) {
+        // pi_uid 기준으로 Upsert 수행 (중복 가입 방지)
         const { data, error } = await supabase
           .from('users')
           .upsert({ 
@@ -88,7 +89,10 @@ export const PiAuthProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           .select()
           .single();
 
-        if (error) throw new Error(`Database Connection Error: ${error.message}. Ensure your Supabase tables are created.`);
+        if (error) {
+          console.error("User Upsert Error:", error);
+          throw new Error(`데이터베이스 동기화 실패: ${error.message}`);
+        }
         finalUserData = data;
       } else {
         finalUserData = {
@@ -102,7 +106,7 @@ export const PiAuthProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       setUser(finalUserData);
       localStorage.setItem('pi_links_user', JSON.stringify(finalUserData));
     } catch (err: any) {
-      alert(err.message || 'Login failed');
+      alert(err.message || '로그인 중 오류가 발생했습니다.');
     } finally {
       setLoading(false);
     }

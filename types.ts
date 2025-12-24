@@ -16,7 +16,7 @@ export interface Post {
   category: Category;
   title: string;
   description: string;
-  thumbnail_image: string; // 로컬 경로 또는 URL
+  thumbnail_image?: string; // DB에 값이 없을 경우를 대비해 선택 사항으로 변경
   comment?: string;
   status: 'pending' | 'active' | 'rejected';
   created_at: string;
